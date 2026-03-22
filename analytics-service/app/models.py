@@ -6,7 +6,7 @@ class Task(BaseModel):
     id: int
     title: str
     description: Optional[str] = None
-    priority: int  # 1 (low) to 5 (high)
+    priority: int
     estimated_hours: float
     created_at: datetime = datetime.now()
 
