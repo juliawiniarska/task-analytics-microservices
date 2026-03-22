@@ -1,22 +1,14 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
+from .models import Task, AnalysisResult
+from .logic import perform_task_analysis
 
-app = FastAPI()
+app = FastAPI(title="Task Analytics Service")
 
-# This defines what data you expect from the Java side
-class Task(BaseModel):
-    id: int
-    title: str
-    priority: int
-    estimated_hours: float
+@app.get("/")
+def home():
+    return {"message": "Analytics Service is Online"}
 
-@app.post("/analyze-task")
-async def analyze_task(task: Task):
-    # This is where your analytical logic will eventually go
-    complexity_score = task.priority * task.estimated_hours
-    
-    return {
-        "task_id": task.id,
-        "complexity_score": complexity_score,
-        "recommendation": "High Priority" if complexity_score > 10 else "Standard"
-    }
+@app.post("/analyze", response_model=AnalysisResult)
+async def analyze(task: Task):
+    result = perform_task_analysis(task)
+    return result
