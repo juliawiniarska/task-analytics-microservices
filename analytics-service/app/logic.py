@@ -2,14 +2,7 @@ from .models import Task, AnalysisResult
 from datetime import timedelta
 
 def perform_task_analysis(task: Task) -> AnalysisResult:
-    """
-    The core analytical logic. 
-    In the future, this could use Machine Learning or complex stats.
-    """
-    # Simple logic: higher priority and more hours = higher complexity
     score = (task.priority * 1.5) + (task.estimated_hours * 0.5)
-    
-    # Determine risk
     if score > 15:
         risk = "Critical"
     elif score > 8:
