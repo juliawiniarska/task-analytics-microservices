@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Page;
 
 import java.util.List;
 
@@ -86,5 +87,15 @@ public class TaskController {
     public ResponseEntity<TaskResponse> completeTask(@PathVariable Long id) {
         TaskResponse response = taskService.completeTask(id);
         return ResponseEntity.ok(response);
+    }
+
+    /** Pobieranie zadań z paginacją */
+    @GetMapping("/paged")
+    public ResponseEntity<Page<TaskResponse>> getTasksPaged(
+            @RequestParam(required = false) TaskStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Page<TaskResponse> tasks = taskService.getTasksPaged(status, page, size);
+        return ResponseEntity.ok(tasks);
     }
 }
