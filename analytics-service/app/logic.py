@@ -42,3 +42,39 @@ def perform_task_analysis(task: Task) -> AnalysisResult:
         risk_level=risk,
         burnout_warning=burnout
     )
+
+    from typing import List
+
+def calculate_plan_progress(plan_id: int, tasks: List[Task]) -> PlanProgressResult:
+    total_tasks = len(tasks)
+    
+    if total_tasks == 0:
+        return PlanProgressResult(
+            plan_id=plan_id, total_tasks=0, completed_tasks=0, 
+            completion_percentage=0.0, total_hours=0.0, 
+            remaining_hours=0.0, plan_status="Empty"
+        )
+
+    completed_tasks = sum(1 for t in tasks if t.status == "done")
+    total_hours = sum(t.estimated_hours for t in tasks)
+    completed_hours = sum(t.estimated_hours for t in tasks if t.status == "done")
+    remaining_hours = total_hours - completed_hours
+
+    completion_percentage = (completed_hours / total_hours) * 100
+
+    if completion_percentage == 100:
+        health = "Completed"
+    elif remaining_hours > 40 and completed_tasks == 0:
+        health = "At Risk - Not Started"
+    else:
+        health = "In Progress"
+
+    return PlanProgressResult(
+        plan_id=plan_id,
+        total_tasks=total_tasks,
+        completed_tasks=completed_tasks,
+        completion_percentage=round(completion_percentage, 1),
+        total_hours=total_hours,
+        remaining_hours=remaining_hours,
+        plan_status=health
+    )
