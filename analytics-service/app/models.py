@@ -1,17 +1,28 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
+# 1. The Updated Task Model
 class Task(BaseModel):
     id: int
+    plan_id: int
     title: str
-    description: Optional[str] = None
     priority: int
     estimated_hours: float
-    created_at: datetime = datetime.now()
+    status: str               
+    due_date: Optional[datetime] = None
 
 class AnalysisResult(BaseModel):
     task_id: int
-    complexity_score: float
+    smart_score: float
     risk_level: str
-    suggested_deadline: datetime
+    burnout_warning: bool
+
+class PlanProgressResult(BaseModel):
+    plan_id: int
+    total_tasks: int
+    completed_tasks: int
+    completion_percentage: float
+    total_hours: float
+    remaining_hours: float
+    plan_status: str
