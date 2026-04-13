@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  # Baza danych PostgreSQL dla usługi operacyjnej
+  task-db:
+    image: postgres:16-alpine
+    container_name: task-db
+    environment:
+      POSTGRES_DB: taskdb
+      POSTGRES_USER: taskuser
+      POSTGRES_PASSWORD: taskpass
+    ports:
+      - "5432:5432"
+    volumes:
+      - task-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskuser -d taskdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Usługa operacyjna (Task Service)
+  task-service:
+    build: .
+    container_name: task-service
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://task-db:5432/taskdb
+      SPRING_DATASOURCE_USERNAME: taskuser
+      SPRING_DATASOURCE_PASSWORD: taskpass
+    ports:
+      - "8080:8080"
+    depends_on:
+      task-db:
+        condition: service_healthy
+
+volumes:
+  task-db-data:
