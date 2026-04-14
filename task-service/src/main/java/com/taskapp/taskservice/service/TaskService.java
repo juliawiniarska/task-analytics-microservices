@@ -4,6 +4,8 @@ import com.taskapp.taskservice.dto.ChangeStatusRequest;
 import com.taskapp.taskservice.dto.CreateTaskRequest;
 import com.taskapp.taskservice.dto.TaskResponse;
 import com.taskapp.taskservice.dto.UpdateTaskRequest;
+import com.taskapp.taskservice.event.TaskEventPublisher;
+import com.taskapp.taskservice.event.TaskEventType;
 import com.taskapp.taskservice.exception.InvalidStatusTransitionException;
 import com.taskapp.taskservice.exception.TaskNotFoundException;
 import com.taskapp.taskservice.model.Task;
@@ -12,8 +14,10 @@ import com.taskapp.taskservice.model.TaskStatus;
 import com.taskapp.taskservice.repository.TaskRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,14 +26,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-
 /**
  * Serwis realizujący logikę biznesową zarządzania zadaniami.
- * Odpowiada za operacje CRUD, zmianę statusu oraz oznaczanie jako ukończone.
+ * Odpowiada za operacje CRUD, zmianę statusu, oznaczanie jako ukończone
+ * oraz publikację zdarzeń na kolejkę RabbitMQ.
  */
 @Service
 @RequiredArgsConstructor
@@ -38,6 +38,7 @@ import org.springframework.data.domain.Sort;
 public class TaskService {
 
     private final TaskRepository taskRepository;
+    private final TaskEventPublisher taskEventPublisher;
 
     /**
      * Dozwolone przejścia między statusami zadania.
@@ -46,13 +47,10 @@ public class TaskService {
     private static final Map<TaskStatus, Set<TaskStatus>> ALLOWED_TRANSITIONS = Map.of(
             TaskStatus.TODO, Set.of(TaskStatus.IN_PROGRESS, TaskStatus.CANCELLED),
             TaskStatus.IN_PROGRESS, Set.of(TaskStatus.TODO, TaskStatus.DONE, TaskStatus.CANCELLED),
-            TaskStatus.DONE, Set.of(),        // Stan końcowy - brak przejść
-            TaskStatus.CANCELLED, Set.of(TaskStatus.TODO)  // Można przywrócić anulowane
+            TaskStatus.DONE, Set.of(),
+            TaskStatus.CANCELLED, Set.of(TaskStatus.TODO)
     );
 
-    /**
-     * Tworzy nowe zadanie na podstawie danych z żądania.
-     */
     public TaskResponse createTask(CreateTaskRequest request) {
         Task task = Task.builder()
                 .title(request.getTitle())
@@ -64,12 +62,13 @@ public class TaskService {
 
         Task savedTask = taskRepository.save(task);
         log.info("Utworzono zadanie: id={}, tytuł='{}'", savedTask.getId(), savedTask.getTitle());
+
+        // Publikacja zdarzenia TASK_CREATED
+        taskEventPublisher.publish(TaskEventType.TASK_CREATED, savedTask, null);
+
         return TaskResponse.fromEntity(savedTask);
     }
 
-    /**
-     * Pobiera wszystkie zadania, opcjonalnie filtrowane po statusie.
-     */
     @Transactional(readOnly = true)
     public List<TaskResponse> getAllTasks(TaskStatus status) {
         List<Task> tasks;
@@ -83,19 +82,12 @@ public class TaskService {
                 .toList();
     }
 
-    /**
-     * Pobiera pojedyncze zadanie po ID.
-     */
     @Transactional(readOnly = true)
     public TaskResponse getTaskById(Long id) {
         Task task = findTaskOrThrow(id);
         return TaskResponse.fromEntity(task);
     }
 
-    /**
-     * Aktualizuje dane zadania (tytuł, opis, priorytet, termin).
-     * Aktualizowane są tylko pola, które zostały podane w żądaniu (nie-null).
-     */
     public TaskResponse updateTask(Long id, UpdateTaskRequest request) {
         Task task = findTaskOrThrow(id);
 
@@ -114,66 +106,58 @@ public class TaskService {
 
         Task updatedTask = taskRepository.save(task);
         log.info("Zaktualizowano zadanie: id={}", updatedTask.getId());
+
+        // Publikacja zdarzenia TASK_UPDATED
+        taskEventPublisher.publish(TaskEventType.TASK_UPDATED, updatedTask, null);
+
         return TaskResponse.fromEntity(updatedTask);
     }
 
-    /**
-     * Usuwa zadanie o podanym ID.
-     */
     public void deleteTask(Long id) {
         Task task = findTaskOrThrow(id);
+
+        // Publikacja zdarzenia TASK_DELETED przed usunięciem
+        taskEventPublisher.publish(TaskEventType.TASK_DELETED, task, null);
+
         taskRepository.delete(task);
         log.info("Usunięto zadanie: id={}", id);
     }
 
-    /**
-     * Zmienia status zadania z walidacją dozwolonych przejść.
-     * Implementuje uproszczoną maszynę stanów.
-     */
     public TaskResponse changeStatus(Long id, ChangeStatusRequest request) {
         Task task = findTaskOrThrow(id);
         TaskStatus currentStatus = task.getStatus();
         TaskStatus newStatus = request.getStatus();
 
-        // Walidacja przejścia między statusami
         Set<TaskStatus> allowedNextStatuses = ALLOWED_TRANSITIONS.getOrDefault(currentStatus, Set.of());
         if (!allowedNextStatuses.contains(newStatus)) {
             throw new InvalidStatusTransitionException(currentStatus, newStatus);
         }
 
+        TaskStatus previousStatus = task.getStatus();
         task.setStatus(newStatus);
 
-        // Jeśli zadanie ukończone - zapisz datę ukończenia
         if (newStatus == TaskStatus.DONE) {
             task.setCompletedAt(LocalDateTime.now());
         }
 
         Task updatedTask = taskRepository.save(task);
         log.info("Zmieniono status zadania: id={}, {} -> {}", id, currentStatus, newStatus);
+
+        // Publikacja odpowiedniego zdarzenia
+        if (newStatus == TaskStatus.DONE) {
+            taskEventPublisher.publish(TaskEventType.TASK_COMPLETED, updatedTask, previousStatus);
+        } else {
+            taskEventPublisher.publish(TaskEventType.TASK_STATUS_CHANGED, updatedTask, previousStatus);
+        }
+
         return TaskResponse.fromEntity(updatedTask);
     }
 
-    /**
-     * Oznacza zadanie jako ukończone (skrót dla zmiany statusu na DONE).
-     * Dozwolone tylko z poziomu IN_PROGRESS.
-     */
     public TaskResponse completeTask(Long id) {
         ChangeStatusRequest request = new ChangeStatusRequest(TaskStatus.DONE);
         return changeStatus(id, request);
     }
 
-    /**
-     * Pomocnicza metoda do wyszukiwania zadania lub rzucenia wyjątku.
-     */
-    private Task findTaskOrThrow(Long id) {
-        return taskRepository.findById(id)
-                .orElseThrow(() -> new TaskNotFoundException(id));
-    }
-
-    /**
-     * Pobiera zadania z paginacją i opcjonalnym filtrem statusu.
-     * Przydatne przy dużej liczbie zadań.
-     */
     @Transactional(readOnly = true)
     public Page<TaskResponse> getTasksPaged(TaskStatus status, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
@@ -186,5 +170,10 @@ public class TaskService {
         }
 
         return taskPage.map(TaskResponse::fromEntity);
+    }
+
+    private Task findTaskOrThrow(Long id) {
+        return taskRepository.findById(id)
+                .orElseThrow(() -> new TaskNotFoundException(id));
     }
 }

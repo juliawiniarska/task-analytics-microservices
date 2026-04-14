@@ -19,6 +19,22 @@ services:
       timeout: 3s
       retries: 5
 
+  # Broker wiadomości RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"    # AMQP
+      - "15672:15672"  # Panel zarządzania
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Usługa operacyjna (Task Service)
   task-service:
     build: .
@@ -28,10 +44,13 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://task-db:5432/taskdb
       SPRING_DATASOURCE_USERNAME: taskuser
       SPRING_DATASOURCE_PASSWORD: taskpass
+      SPRING_RABBITMQ_HOST: rabbitmq
     ports:
       - "8080:8080"
     depends_on:
       task-db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
 volumes:
