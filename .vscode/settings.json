@@ -1,7 +1,11 @@
 {
 <<<<<<< HEAD
+<<<<<<< HEAD
     "java.configuration.updateBuildConfiguration": "automatic"
 =======
     "java.configuration.updateBuildConfiguration": "interactive"
 >>>>>>> 2698900 (Add RabbitMQ integration for task events and configuration)
+=======
+    "java.configuration.updateBuildConfiguration": "interactive"
+>>>>>>> 51e9b0a98b03d3870282b13ceaa642492e7d6e53
 }

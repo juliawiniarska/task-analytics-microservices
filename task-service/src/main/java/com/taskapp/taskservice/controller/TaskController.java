@@ -98,4 +98,11 @@ public class TaskController {
         Page<TaskResponse> tasks = taskService.getTasksPaged(status, page, size);
         return ResponseEntity.ok(tasks);
     }
+
+    /** Filtrowanie zadań wg strategii (overdue, high-priority) */
+    @GetMapping("/filter/{filterName}")
+    public ResponseEntity<List<TaskResponse>> getFilteredTasks(@PathVariable String filterName) {
+        List<TaskResponse> tasks = taskService.getFilteredTasks(filterName);
+        return ResponseEntity.ok(tasks);
+    }
 }

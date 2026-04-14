@@ -12,6 +12,8 @@ import com.taskapp.taskservice.model.Task;
 import com.taskapp.taskservice.model.TaskPriority;
 import com.taskapp.taskservice.model.TaskStatus;
 import com.taskapp.taskservice.repository.TaskRepository;
+import com.taskapp.taskservice.service.filter.TaskFilterService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -176,4 +178,20 @@ public class TaskService {
         return taskRepository.findById(id)
                 .orElseThrow(() -> new TaskNotFoundException(id));
     }
+
+    private final TaskFilterService taskFilterService;
+
+    /**
+     * Pobiera zadania przefiltrowane według wybranej strategii.
+     * Wzorzec: Strategy.
+     */
+    @Transactional(readOnly = true)
+    public List<TaskResponse> getFilteredTasks(String filterName) {
+        List<Task> allTasks = taskRepository.findAllByOrderByCreatedAtDesc();
+        List<Task> filteredTasks = taskFilterService.applyFilter(filterName, allTasks);
+        return filteredTasks.stream()
+                .map(TaskResponse::fromEntity)
+                .toList();
+    }
+
 }
