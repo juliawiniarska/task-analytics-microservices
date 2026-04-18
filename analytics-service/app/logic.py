@@ -43,7 +43,7 @@ def perform_task_analysis(task: Task) -> AnalysisResult:
         burnout_warning=burnout
     )
 
-    from typing import List
+from typing import List
 
 def calculate_plan_progress(plan_id: int, tasks: List[Task]) -> PlanProgressResult:
     total_tasks = len(tasks)
