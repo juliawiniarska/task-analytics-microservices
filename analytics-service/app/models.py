@@ -2,7 +2,6 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 
-# 1. The Updated Task Model
 class Task(BaseModel):
     id: int
     plan_id: int

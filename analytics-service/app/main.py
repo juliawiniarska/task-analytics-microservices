@@ -1,4 +1,5 @@
 from typing import List
+from fastapi import FastAPI
 from .models import Task, AnalysisResult, PlanProgressResult
 from .logic import perform_task_analysis, calculate_plan_progress
 

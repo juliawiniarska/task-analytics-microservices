@@ -1,5 +1,6 @@
-from .models import Task, AnalysisResult
+from .models import Task, AnalysisResult, PlanProgressResult 
 from datetime import datetime
+from typing import List
 
 def perform_task_analysis(task: Task) -> AnalysisResult:
 
@@ -42,8 +43,6 @@ def perform_task_analysis(task: Task) -> AnalysisResult:
         risk_level=risk,
         burnout_warning=burnout
     )
-
-from typing import List
 
 def calculate_plan_progress(plan_id: int, tasks: List[Task]) -> PlanProgressResult:
     total_tasks = len(tasks)
